@@ -11,7 +11,7 @@ if not exist build (
 cd build
 
 echo Configuring CMake...
-cmake ..
+cmake -DCMAKE_TOOLCHAIN_FILE="C:\Users\ichir\Desktop\cpp - test\vcpkg\scripts\buildsystems\vcpkg.cmake" ..
 
 if %ERRORLEVEL% neq 0 (
     echo CMake configuration failed!

@@ -1,5 +1,10 @@
 #include "App.h"
 #include <assert.h>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -148,7 +153,7 @@ App::App()
 
 	// Create window with graphics context
 	float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
-	m_window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+	m_window = glfwCreateWindow((int)(1920 * main_scale), (int)(1080 * main_scale), "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
 	if (m_window == nullptr)
 		throw std::runtime_error("Failed to create GLFW window");
 	glfwMakeContextCurrent(m_window);
@@ -191,6 +196,31 @@ App::App()
 	ImGui_ImplGlfw_InitForOpenGL(m_window, true);
 
 	ImGui_ImplOpenGL3_Init(glsl_version);
+
+	// get pid of this process and create randomized name
+#ifdef _WIN32
+	auto pid = _getpid();
+#else
+	auto pid = getpid();
+#endif
+	m_randomName = "user_" + std::to_string(pid);
+	m_client = std::make_unique<WebRTCClient>(m_randomName);
+	
+	// FLOW STEP 1: Set up callback for when someone wants to connect to us
+	// This gets called when we receive a "connection-request" message
+	m_client->onConnectionRequest = [this](const std::string& fromClientId, const std::string& fromClientName) {
+		// Store who's asking and show the popup to user
+		m_requestingClientId = fromClientId;
+		m_requestingClientName = fromClientName;
+		m_showConnectionPopup = true; // This triggers the "Accept/Reject" popup
+	};
+
+	std::cout << "Connecting to signaling server..." << std::endl;
+	if (!m_client->connectToSignalingServer("ws://localhost:8080/ws"))
+	{
+		std::cout << "Failed to connect. Make sure Go server is running!" << std::endl;
+		throw std::runtime_error("Failed to connect to signaling server");
+	}
 }
 
 App::~App()
@@ -260,6 +290,161 @@ void App::run()
 			if (ImGui::Button("Close Me"))
 				m_show_another_window = false;
 			ImGui::End();
+		}
+
+		{
+			ImGui::Begin("WebRTC Client");
+			ImGui::Text("Your ID: %s", m_randomName.c_str());
+			ImGui::SameLine();
+			if (ImGui::Button("Copy##CopyID"))
+			{
+				ImGui::SetClipboardText(m_randomName.c_str());
+			}
+			ImGui::Separator();
+			
+			// Active users section
+			auto connected_peers = m_client->getConnectedPeerIds();
+			ImGui::Text("Online Users (%zu) | Connected (%zu):", m_client->getConnectedClients().size(), connected_peers.size());
+			
+			if (!connected_peers.empty()) {
+				ImGui::SameLine();
+				ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "• %zu active connections", connected_peers.size());
+			}
+			
+			ImGui::BeginChild("ActiveUsers", ImVec2(0, 120), true);
+			for (const auto& clientId : m_client->getConnectedClients())
+			{
+				bool isConnected = m_client->isConnectedToPeer(clientId);
+				
+				// Show connection status with color coding
+				if (isConnected)
+				{
+					ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "★ %s (Connected)", clientId.c_str());
+				}
+				else
+				{
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "• %s (Online)", clientId.c_str());
+				}
+				
+				ImGui::SameLine();
+				if (ImGui::SmallButton(("Copy##" + clientId).c_str()))
+				{
+					ImGui::SetClipboardText(clientId.c_str());
+				}
+				
+				if (!isConnected)
+				{
+					ImGui::SameLine();
+					if (ImGui::SmallButton(("Connect##" + clientId).c_str()))
+					{
+						// FLOW STEP 2: User clicks "Connect" - we send a connection request
+						// This sends JSON: {"type":"connection-request","from":"us","to":"them"}
+						m_client->sendConnectionRequest(clientId);
+					}
+				}
+				else
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "✓ Connected");
+					ImGui::SameLine();
+					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+					if (ImGui::SmallButton(("Disconnect##" + clientId).c_str()))
+					{
+						m_client->disconnectFromPeer(clientId);
+					}
+					ImGui::PopStyleColor(3);
+				}
+			}
+			if (m_client->getConnectedClients().empty())
+			{
+				ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No other users online");
+			}
+			ImGui::EndChild();
+			
+			ImGui::Separator();
+			
+			// Manual connection section
+			ImGui::Text("Manual Connect:");
+			static char targetClientId[256] = {};
+			ImGui::InputText("Client ID", targetClientId, 256);
+			ImGui::SameLine();
+			if (ImGui::Button("Request Connection") && strlen(targetClientId) > 0)
+			{
+				m_client->sendConnectionRequest(targetClientId);
+			}
+			
+			ImGui::Separator();
+			
+			// Message section
+			ImGui::Text("Send Message:");
+			static char buffer[1024] = {};
+			ImGui::InputText("Message", buffer, 1024);
+			
+			// Send options
+			if (ImGui::Button("Broadcast to All") && strlen(buffer) > 0)
+			{
+				m_client->sendMessage(buffer); // Empty peer_id = broadcast
+				memset(buffer, 0, sizeof(buffer));
+			}
+			
+			// Send to specific peers
+			auto connected_peers_list = m_client->getConnectedPeerIds();
+			if (!connected_peers_list.empty()) {
+				ImGui::SameLine();
+				ImGui::Text("or send to:");
+				for (const auto& peer_id : connected_peers_list) {
+					ImGui::SameLine();
+					if (ImGui::SmallButton((peer_id + "##send").c_str()) && strlen(buffer) > 0) {
+						m_client->sendMessage(buffer, peer_id);
+						memset(buffer, 0, sizeof(buffer));
+					}
+				}
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Message History:");
+			ImGui::BeginChild("MessageHistory", ImVec2(0, 180), true);
+			for (const auto &msg : m_client->getMessageHistory())
+			{
+				ImGui::TextWrapped("%s", msg.c_str());
+			}
+			ImGui::EndChild();
+			ImGui::End();
+		}
+		
+		// Connection request popup
+		if (m_showConnectionPopup)
+		{
+			ImGui::OpenPopup("Connection Request");
+		}
+		
+		if (ImGui::BeginPopupModal("Connection Request", &m_showConnectionPopup, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::Text("User '%s' wants to connect with you.", m_requestingClientName.c_str());
+			ImGui::Text("Do you want to accept this connection?");
+			ImGui::Separator();
+			
+			if (ImGui::Button("Accept"))
+			{
+				// FLOW STEP 3: User accepts connection request
+				// Sends JSON: {"type":"connection-response","data":{"accepted":true}}
+				m_client->sendConnectionResponse(m_requestingClientId, true);
+				m_showConnectionPopup = false;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Reject"))
+			{
+				// FLOW STEP 3 (Alternative): User rejects connection request  
+				// Sends JSON: {"type":"connection-response","data":{"accepted":false}}
+				m_client->sendConnectionResponse(m_requestingClientId, false);
+				m_showConnectionPopup = false;
+				ImGui::CloseCurrentPopup();
+			}
+			
+			ImGui::EndPopup();
 		}
 
 		// Rendering

@@ -23,10 +23,12 @@ endif()
 
 # Add vendor libraries
 add_subdirectory(vendor)
+add_subdirectory(vendor/json)
 
 # Find packages BEFORE defining targets
 # find_package(fmt REQUIRED)
 # find_package(spdlog REQUIRED)
+find_package(LibDataChannel CONFIG REQUIRED)
 
 # Recursively find all source files in src/
 file(GLOB_RECURSE SOURCES
@@ -83,6 +85,8 @@ endif()
 # Link libraries AFTER target configuration
 target_link_libraries(${PROJECT_NAME} PRIVATE
     imgui
+	LibDataChannel::LibDataChannel
+	nlohmann_json::nlohmann_json
 )
 # target_link_libraries(${PROJECT_NAME} PRIVATE
 #     fmt::fmt
