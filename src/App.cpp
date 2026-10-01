@@ -1,4 +1,4 @@
-#include "App.h"
+#include "App.hpp"
 #include <assert.h>
 #ifdef _WIN32
 #include <process.h>
@@ -83,7 +83,7 @@ static void SetDarkThemeColors()
 	colors[ImGuiCol_ResizeGripActive] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);	 // Resize grip when active
 
 	// Text input cursor
-	colors[ImGuiCol_InputTextCursor] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f); // Text input cursor
+	//colors[ImGuiCol_InputTextCursor] = ImVec4(0.70f, 0.70f, 0.70f, 1.00f); // Text input cursor
 
 	// ALL TAB COLORS (both old and new names)
 	// Using the newer tab color naming from your enum
@@ -124,7 +124,7 @@ static void SetDarkThemeColors()
 	// Miscellaneous
 	colors[ImGuiCol_TextLink] = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);				 // Light grey for links (not blue)
 	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.30f, 0.30f, 0.30f, 0.35f);		 // Light grey selection background
-	colors[ImGuiCol_TreeLines] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);			 // Tree node lines
+	//colors[ImGuiCol_TreeLines] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);			 // Tree node lines
 	colors[ImGuiCol_DragDropTarget] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);		 // Drag and drop target
 	colors[ImGuiCol_NavCursor] = ImVec4(0.30f, 0.30f, 0.30f, 1.00f);			 // Navigation cursor
 	colors[ImGuiCol_NavWindowingHighlight] = ImVec4(0.40f, 0.40f, 0.40f, 0.70f); // Nav windowing highlight
@@ -152,7 +152,9 @@ App::App()
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
 	// Create window with graphics context
-	float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
+	float xscale = 1.0f, yscale = 1.0f;
+	glfwGetMonitorContentScale(glfwGetPrimaryMonitor(), &xscale, &yscale);
+	float main_scale = xscale; //ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
 	m_window = glfwCreateWindow((int)(1920 * main_scale), (int)(1080 * main_scale), "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
 	if (m_window == nullptr)
 		throw std::runtime_error("Failed to create GLFW window");
@@ -179,10 +181,10 @@ App::App()
 	// Setup scaling
 	ImGuiStyle &style = ImGui::GetStyle();
 	style.ScaleAllSizes(main_scale); // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
-	style.FontScaleDpi = main_scale; // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
+	//style.FontScaleDpi = main_scale; // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
 #if GLFW_VERSION_MAJOR >= 3 && GLFW_VERSION_MINOR >= 3
-	io.ConfigDpiScaleFonts = true;	   // [Experimental] Automatically overwrite style.FontScaleDpi in Begin() when Monitor DPI changes. This will scale fonts but _NOT_ scale sizes/padding for now.
-	io.ConfigDpiScaleViewports = true; // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
+	//io.ConfigDpiScaleFonts = true;	   // [Experimental] Automatically overwrite style.FontScaleDpi in Begin() when Monitor DPI changes. This will scale fonts but _NOT_ scale sizes/padding for now.
+	//io.ConfigDpiScaleViewports = true; // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
 #endif
 
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
@@ -205,7 +207,7 @@ App::App()
 #endif
 	m_randomName = "user_" + std::to_string(pid);
 	m_client = std::make_unique<WebRTCClient>(m_randomName);
-	
+
 	// FLOW STEP 1: Set up callback for when someone wants to connect to us
 	// This gets called when we receive a "connection-request" message
 	m_client->onConnectionRequest = [this](const std::string& fromClientId, const std::string& fromClientName) {
@@ -301,21 +303,21 @@ void App::run()
 				ImGui::SetClipboardText(m_randomName.c_str());
 			}
 			ImGui::Separator();
-			
+
 			// Active users section
 			auto connected_peers = m_client->getConnectedPeerIds();
 			ImGui::Text("Online Users (%zu) | Connected (%zu):", m_client->getConnectedClients().size(), connected_peers.size());
-			
+
 			if (!connected_peers.empty()) {
 				ImGui::SameLine();
 				ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "• %zu active connections", connected_peers.size());
 			}
-			
+
 			ImGui::BeginChild("ActiveUsers", ImVec2(0, 120), true);
 			for (const auto& clientId : m_client->getConnectedClients())
 			{
 				bool isConnected = m_client->isConnectedToPeer(clientId);
-				
+
 				// Show connection status with color coding
 				if (isConnected)
 				{
@@ -325,13 +327,13 @@ void App::run()
 				{
 					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "• %s (Online)", clientId.c_str());
 				}
-				
+
 				ImGui::SameLine();
 				if (ImGui::SmallButton(("Copy##" + clientId).c_str()))
 				{
 					ImGui::SetClipboardText(clientId.c_str());
 				}
-				
+
 				if (!isConnected)
 				{
 					ImGui::SameLine();
@@ -362,9 +364,9 @@ void App::run()
 				ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No other users online");
 			}
 			ImGui::EndChild();
-			
+
 			ImGui::Separator();
-			
+
 			// Manual connection section
 			ImGui::Text("Manual Connect:");
 			static char targetClientId[256] = {};
@@ -374,21 +376,21 @@ void App::run()
 			{
 				m_client->sendConnectionRequest(targetClientId);
 			}
-			
+
 			ImGui::Separator();
-			
+
 			// Message section
 			ImGui::Text("Send Message:");
 			static char buffer[1024] = {};
 			ImGui::InputText("Message", buffer, 1024);
-			
+
 			// Send options
 			if (ImGui::Button("Broadcast to All") && strlen(buffer) > 0)
 			{
 				m_client->sendMessage(buffer); // Empty peer_id = broadcast
 				memset(buffer, 0, sizeof(buffer));
 			}
-			
+
 			// Send to specific peers
 			auto connected_peers_list = m_client->getConnectedPeerIds();
 			if (!connected_peers_list.empty()) {
@@ -413,19 +415,19 @@ void App::run()
 			ImGui::EndChild();
 			ImGui::End();
 		}
-		
+
 		// Connection request popup
 		if (m_showConnectionPopup)
 		{
 			ImGui::OpenPopup("Connection Request");
 		}
-		
+
 		if (ImGui::BeginPopupModal("Connection Request", &m_showConnectionPopup, ImGuiWindowFlags_AlwaysAutoResize))
 		{
 			ImGui::Text("User '%s' wants to connect with you.", m_requestingClientName.c_str());
 			ImGui::Text("Do you want to accept this connection?");
 			ImGui::Separator();
-			
+
 			if (ImGui::Button("Accept"))
 			{
 				// FLOW STEP 3: User accepts connection request
@@ -437,13 +439,13 @@ void App::run()
 			ImGui::SameLine();
 			if (ImGui::Button("Reject"))
 			{
-				// FLOW STEP 3 (Alternative): User rejects connection request  
+				// FLOW STEP 3 (Alternative): User rejects connection request
 				// Sends JSON: {"type":"connection-response","data":{"accepted":false}}
 				m_client->sendConnectionResponse(m_requestingClientId, false);
 				m_showConnectionPopup = false;
 				ImGui::CloseCurrentPopup();
 			}
-			
+
 			ImGui::EndPopup();
 		}
 

@@ -1,0 +1,16 @@
+{
+  "name": "webrtc-chat",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "libdatachannel",
+    {
+          "name": "imgui",
+          "features": [
+            "glfw-binding",
+            "opengl3-binding",
+            "docking-experimental"
+          ]
+        },
+    "glfw3"
+  ]
+}

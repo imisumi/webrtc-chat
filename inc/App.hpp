@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include "Client.h"
+#include "Client.hpp"
 
 struct GLFWwindow;
 class App
@@ -30,7 +30,7 @@ private:
 
 	std::string m_randomName;
 	std::unique_ptr<WebRTCClient> m_client;
-	
+
 	// Connection request popup state
 	bool m_showConnectionPopup = false;
 	std::string m_requestingClientName;

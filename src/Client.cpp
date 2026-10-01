@@ -1,4 +1,4 @@
-#include "Client.h"
+#include "Client.hpp"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -72,7 +72,7 @@ void WebRTCClient::setupPeerConnection(const std::string &peer_id)
 								{
 			// FLOW STEP 6: WebRTC generates SDP offer/answer - send it via signaling server
 			std::cout << "Sending " << desc.typeString() << " to " << peer_id << std::endl;
-			
+
 			// Send the SDP (offer or answer) to the other peer via websocket
 			json message = {
 				{"type", desc.typeString()}, // "offer" or "answer"
@@ -80,7 +80,7 @@ void WebRTCClient::setupPeerConnection(const std::string &peer_id)
 				{"to", peer_id},
 				{"data", std::string(desc)}  // The actual SDP data
 			};
-			
+
 			if (signaling_ws) {
 				signaling_ws->send(message.dump());
 			} });
@@ -89,14 +89,14 @@ void WebRTCClient::setupPeerConnection(const std::string &peer_id)
 	peer.pc->onLocalCandidate([this, peer_id](rtc::Candidate candidate)
 							  {
 			std::cout << "Sending ICE candidate to " << peer_id << std::endl;
-			
+
 			json message = {
 				{"type", "ice-candidate"},
 				{"from", client_id},
 				{"to", peer_id},
 				{"data", std::string(candidate)}
 			};
-			
+
 			if (signaling_ws) {
 				signaling_ws->send(message.dump());
 			} });
@@ -126,8 +126,8 @@ void WebRTCClient::setupDataChannel(const std::string &peer_id, std::shared_ptr<
 			} });
 
 	channel->onClosed([this, peer_id]()
-					  { 
-			std::cout << "Data channel to " << peer_id << " closed" << std::endl; 
+					  {
+			std::cout << "Data channel to " << peer_id << " closed" << std::endl;
 			if (peer_connections.find(peer_id) != peer_connections.end()) {
 				peer_connections[peer_id].connected = false;
 			} });
@@ -142,7 +142,7 @@ bool WebRTCClient::connectToSignalingServer(const std::string &url)
 		signaling_ws->onOpen([this]()
 							 {
                 std::cout << "Connected to signaling server" << std::endl;
-                
+
                 // Join the server
                 json join_message = {
                     {"type", "join"},

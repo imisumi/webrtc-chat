@@ -1,141 +1,74 @@
-# Simple C++ CMakeLists.txt Template - Explicit Files
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.18)
+project(MyApp CXX)
 
-project(MyApp VERSION 1.0.0)
+# Clear default flags for all compilers to ensure our settings take precedence.
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_INIT "")
+    set(CMAKE_CXX_FLAGS_DEBUG_INIT "/Od /RTC1")
+    set(CMAKE_CXX_FLAGS_RELEASE_INIT "")
+else()
+    # Also clear the flags for GCC/Clang.
+    set(CMAKE_CXX_FLAGS_INIT "")
+    # CMake's default adds '-g'. We add it back here to ensure debug symbols.
+    set(CMAKE_CXX_FLAGS_DEBUG_INIT "-g")
+    # Release flags like -O3 and -DNDEBUG are set later, so we clear this.
+    set(CMAKE_CXX_FLAGS_RELEASE_INIT "")
+endif()
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 23)
+# Set the C++ standard
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Export compile commands for IDEs and tools
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Project options
-option(USE_PCH "Use precompiled headers" ON)
-option(ENABLE_CLANG_TIDY "Enable clang-tidy analysis" OFF)
-
-# Compiler warnings
-if(MSVC)
-    add_compile_options(/W4)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
-# Add vendor libraries
-add_subdirectory(vendor)
-add_subdirectory(vendor/json)
-
-# Find packages BEFORE defining targets
-# find_package(fmt REQUIRED)
-# find_package(spdlog REQUIRED)
+#find_package(glm CONFIG REQUIRED)
+#find_package(Stb REQUIRED)
+#find_package(CURL REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_package(LibDataChannel CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(OpenGL REQUIRED)
 
-# Recursively find all source files in src/
-file(GLOB_RECURSE SOURCES
-    src/*.cpp
-)
+file(GLOB SOURCES "src/*.cpp" "main.cpp")
+add_executable(${PROJECT_NAME} ${SOURCES})
 
-# Recursively find all header files in src/ (for IDE support)
-file(GLOB_RECURSE HEADERS
-    src/*.h
-)
+if(MSVC)
+    message(STATUS "Configuring for MSVC compiler")
+    # wd9025 disables override warning for compiler arguments
+    set(COMMON_COMPILER_FLAGS /W4 /external:W3 /permissive- /GS /MP  /wd9025)
+    set(DEBUG_COMPILER_FLAGS /MDd)
+    set(RELEASE_COMPILER_FLAGS /MD /O2 /Oi /Gy /arch:AVX2)
 
-# Define targets AFTER finding packages
-add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    message(STATUS "Configuring for GCC compiler")
+    set(COMMON_COMPILER_FLAGS -Wall -Wextra -Wpedantic -fstack-protector-strong)
+    set(DEBUG_COMPILER_FLAGS "") # '-g' is now handled by CMAKE_CXX_FLAGS_DEBUG_INIT
+    set(RELEASE_COMPILER_FLAGS -O2 -march=native)
 
-# clang-tidy integration (optional)
-if(ENABLE_CLANG_TIDY)
-    find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
-    if(CLANG_TIDY_EXE)
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            CXX_CLANG_TIDY "${CLANG_TIDY_EXE}"
-        )
-        message(STATUS "clang-tidy enabled for ${PROJECT_NAME}")
-    else()
-        message(WARNING "clang-tidy requested but not found")
-    endif()
+else()
+    message(WARNING "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}. No specific flags will be set.")
+    set(COMMON_COMPILER_FLAGS "")
+    set(DEBUG_COMPILER_FLAGS "")
+    set(RELEASE_COMPILER_FLAGS "")
 endif()
 
-# clang-tidy integration (optional)
-if(ENABLE_CLANG_TIDY)
-    find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
-    if(CLANG_TIDY_EXE)
-        set_target_properties(${PROJECT_NAME} PROPERTIES
-            CXX_CLANG_TIDY "${CLANG_TIDY_EXE};-checks=*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type"
-        )
-        message(STATUS "clang-tidy enabled")
-    else()
-        message(WARNING "clang-tidy requested but not found")
-    endif()
-endif()
+target_include_directories(${PROJECT_NAME} PRIVATE "inc")
 
-# Configure target properties AFTER defining target
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+target_compile_options(${PROJECT_NAME} PRIVATE
+        ${COMMON_COMPILER_FLAGS}
+        $<$<CONFIG:Debug>:${DEBUG_COMPILER_FLAGS}>
+        $<$<CONFIG:Release>:${RELEASE_COMPILER_FLAGS}>
 )
 
-# Precompiled headers (if enabled and pch.h exists)
-if(USE_PCH AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h)
-    target_precompile_headers(${PROJECT_NAME} PRIVATE src/pch.h)
-    message(STATUS "Using precompiled headers: src/pch.h")
-elseif(USE_PCH)
-    message(STATUS "PCH enabled but src/pch.h not found - skipping PCH")
-endif()
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+        $<$<CONFIG:Release>:NDEBUG>
+)
 
-# Link libraries AFTER target configuration
+set_property(TARGET ${PROJECT_NAME} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    imgui
-	LibDataChannel::LibDataChannel
-	nlohmann_json::nlohmann_json
-)
-# target_link_libraries(${PROJECT_NAME} PRIVATE
-#     fmt::fmt
-#     spdlog::spdlog
-# )
-
-# Determine OS and architecture strings
-if(WIN32)
-    set(OS_NAME "windows")
-elseif(APPLE)
-    set(OS_NAME "macos")
-elseif(UNIX)
-    set(OS_NAME "linux")
-else()
-    set(OS_NAME "unknown")
-endif()
-
-# Determine architecture
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)")
-        set(ARCH_NAME "arm64")
-    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)")
-        set(ARCH_NAME "x64")
-    else()
-        set(ARCH_NAME "64bit")
-    endif()
-else()
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|armv7)")
-        set(ARCH_NAME "arm32")
-    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i386|i686|x86)")
-        set(ARCH_NAME "x86")
-    else()
-        set(ARCH_NAME "32bit")
-    endif()
-endif()
-
-# Set output directory: build/bin/build-type/os/arch/
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    # RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/${OS_NAME}/${ARCH_NAME}
-    # RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/$<CONFIG>/${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}
-    # Set working directory for IDEs (Visual Studio, etc.)
-    VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-# Custom target to run the executable from project root
-add_custom_target(run
-    COMMAND $<TARGET_FILE:${PROJECT_NAME}>
-    DEPENDS ${PROJECT_NAME}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Running ${PROJECT_NAME} from project root"
+        nlohmann_json::nlohmann_json
+        LibDataChannel::LibDataChannel
+        imgui::imgui
+        glfw
+        OpenGL::GL
 )
